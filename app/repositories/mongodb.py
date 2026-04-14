@@ -180,6 +180,26 @@ class MongoDBRepository:
             logger.error(f"获取A股公司信息失败: {e}")
             return None
     
+    def get_stock_company_by_code(self, sec_code):
+        """根据股票代码获取A股公司信息
+        
+        Args:
+            sec_code: 股票代码
+            
+        Returns:
+            dict: 股票公司信息，如果不存在则返回None
+        """
+        if not self.client:
+            return None
+        
+        try:
+            # 查询指定股票代码的公司信息
+            doc = self.company_collection.find_one({'sec_code': int(sec_code)}, {'_id': 0})
+            return doc
+        except Exception as e:
+            logger.error(f"根据股票代码获取公司信息失败: {e}")
+            return None
+    
     def get_stock_company_count(self):
         """获取A股公司数量
         
@@ -280,3 +300,20 @@ class MongoDBRepository:
         except Exception as e:
             logger.error(f"获取最新交易日日期失败: {e}")
             return None
+    
+    def get_unique_stock_codes(self):
+        """获取stock_daily_price表中所有唯一的股票代码
+        
+        Returns:
+            list: 唯一股票代码列表
+        """
+        if not self.client:
+            return []
+        
+        try:
+            # 使用distinct获取唯一的股票代码
+            unique_codes = self.collection.distinct('sec_code')
+            return unique_codes
+        except Exception as e:
+            logger.error(f"获取唯一股票代码失败: {e}")
+            return []

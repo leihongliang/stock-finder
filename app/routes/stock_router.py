@@ -149,3 +149,18 @@ def validate_strategy(request: StrategyValidationRequest):
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"服务器内部错误: {str(e)}")
+
+@router.post("/daily-update")
+def daily_update():
+    """每日更新股票数据
+    
+    执行以下操作：
+    1. 更新交易日历到最新的一天
+    2. 更新新增的A股公司，去掉没有的
+    3. 更新日K线到最新的一天
+    """
+    try:
+        result = stock_service.daily_update()
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"服务器内部错误: {str(e)}")

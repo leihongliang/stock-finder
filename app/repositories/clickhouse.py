@@ -230,3 +230,23 @@ class ClickHouseRepository:
         except Exception as e:
             print(f"获取A股公司数量失败: {e}")
             return 0
+    
+    def get_unique_stock_codes(self):
+        """获取stock_daily_price表中所有唯一的股票代码
+        
+        Returns:
+            list: 唯一股票代码列表
+        """
+        if not self.client:
+            return []
+        
+        try:
+            # 确保使用stock_data数据库
+            self.client.execute('USE stock_data')
+            result = self.client.execute('SELECT DISTINCT sec_code FROM stock_data.stock_daily_price')
+            # 转换结果格式
+            unique_codes = [row[0] for row in result]
+            return unique_codes
+        except Exception as e:
+            print(f"获取唯一股票代码失败: {e}")
+            return []

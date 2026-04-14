@@ -307,7 +307,7 @@ class StockService:
             
             # 每处理100只股票打印一次进度
             if processed_count % 100 == 0:
-                print(f"已处理 {processed_count} 只股票，已保存 {saved_count} 只股票的数据")
+                # print(f"已处理 {processed_count} 只股票，已保存 {saved_count} 只股票的数据")
                 # 每处理100只股票后增加等待时间，降低请求频率
                 time.sleep(10)
         
@@ -533,6 +533,34 @@ class StockService:
             return self.repo.get_stock_companies()
         except Exception as e:
             logger.error(f"从数据库获取A股公司信息失败: {e}")
+            return []
+    
+    def get_stock_company_by_code(self, stock_code):
+        """根据股票代码从数据库获取股票公司信息
+        
+        Args:
+            stock_code: 股票代码
+            
+        Returns:
+            dict or object: 股票公司信息，如果不存在则返回None
+        """
+        try:
+            # 直接从数据库根据股票代码查询
+            return self.repo.get_stock_company_by_code(stock_code)
+        except Exception as e:
+            logger.error(f"根据股票代码获取公司信息失败: {e}")
+            return None
+    
+    def get_all_a_stocks_from_db(self):
+        """从数据库的stock_daily_price表获取所有A股股票列表
+        
+        Returns:
+            list: 股票代码列表
+        """
+        try:
+            return self.repo.get_unique_stock_codes()
+        except Exception as e:
+            logger.error(f"从数据库获取A股股票列表失败: {e}")
             return []
     
     def sync_stock_data_in_range(self, start_date, end_date, stock_codes=None, data_source="tushare"):
@@ -845,3 +873,44 @@ class StockService:
         """
         from app.services.strategies import validate_strategy
         return validate_strategy(self, strategy_name, start_date, end_date)
+    
+    def daily_update(self):
+        """每日更新股票数据
+        
+        执行以下操作：
+        1. 更新交易日历到最新的一天
+        2. 更新新增的A股公司，去掉没有的
+        3. 更新日K线到最新的一天
+        
+        Returns:
+            dict: 更新结果
+        """
+        try:
+            results = {}
+            
+            # 1. 更新交易日历到最新的一天
+            logger.info("开始更新交易日历...")
+            calendar_result = self.sync_trade_calendar()
+            results['calendar_update'] = calendar_result
+            
+            # 2. 更新新增的A股公司，去掉没有的
+            logger.info("开始更新A股公司信息...")
+            companies_result = self.save_stock_companies()
+            results['companies_update'] = {"success": companies_result, "message": "A股公司信息更新完成"}
+            
+            # 3. 更新日K线到最新的一天
+            logger.info("开始更新日K线数据...")
+            # 计算日期范围（最近10天）
+            from datetime import datetime, timedelta
+            end_date = datetime.now().strftime("%Y%m%d")
+            start_date = (datetime.now() - timedelta(days=10)).strftime("%Y%m%d")
+            
+            # 同步最近10天的股票数据
+            kline_result = self.sync_stock_data_in_range(start_date, end_date, data_source="tushare")
+            results['kline_update'] = kline_result
+            
+            logger.info("每日更新完成")
+            return {"success": True, "results": results, "message": "每日更新完成"}
+        except Exception as e:
+            logger.error(f"每日更新失败: {e}")
+            return {"success": False, "message": f"每日更新失败: {str(e)}"}
