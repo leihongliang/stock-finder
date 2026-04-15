@@ -3,7 +3,6 @@ import time
 from datetime import datetime, date, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import akshare as ak
-from app.repositories.clickhouse import ClickHouseRepository
 from app.repositories.mongodb import MongoDBRepository
 from app.models.stock import StockDailyPrice
 from app.models.company import StockCompany
@@ -20,19 +19,13 @@ class StockService:
     """
     
     def __init__(self):
-        # 根据配置选择数据库类型
-        if settings.DATABASE_TYPE == "mongodb":
-            # 初始化MongoDB仓库
-            self.repo = MongoDBRepository(
-                host=settings.MONGODB_HOST,
-                port=settings.MONGODB_PORT,
-                database=settings.MONGODB_DATABASE
-            )
-            logger.info("使用MongoDB作为数据库")
-        # else:
-        #     # 初始化ClickHouse仓库
-        #     self.repo = ClickHouseRepository()
-        #     logger.info("使用ClickHouse作为数据库")
+        # 初始化MongoDB仓库
+        self.repo = MongoDBRepository(
+            host=settings.MONGODB_HOST,
+            port=settings.MONGODB_PORT,
+            database=settings.MONGODB_DATABASE
+        )
+        logger.info("使用MongoDB作为数据库")
     
     def get_all_a_stocks(self, data_source="akshare") -> list[StockCompany]:
         """获取所有A股股票列表
@@ -154,9 +147,9 @@ class StockService:
             return []
     
     def save_stock_data(self):
-        """获取所有A股近一年日K线数据并保存到ClickHouse
+        """获取所有A股近一年日K线数据并保存到MongoDB
 
-        从AkShare获取所有A股的近一年日K线数据，并保存到ClickHouse的stock_daily_price表中。
+        从AkShare获取所有A股的近一年日K线数据，并保存到MongoDB的stock_daily_price集合中。
         """
         # 初始化数据库
         if not self.repo.init_tables():
@@ -295,7 +288,7 @@ class StockService:
                             
                             insert_data.append(stock_price)
                     
-                    # 插入数据到ClickHouse
+                    # 插入数据到MongoDB
                     if insert_data:
                         self.repo.save_stock_prices(insert_data)
                         saved_count += 1
@@ -314,9 +307,9 @@ class StockService:
         print(f"数据获取完成，共处理 {processed_count} 只股票，成功保存 {saved_count} 只股票的日K线数据")
     
     def load_stock_data(self, stock_code):
-        """从ClickHouse加载股票数据
+        """从MongoDB加载股票数据
         
-        从ClickHouse的stock_daily_price表中加载指定股票的数据。
+        从MongoDB的stock_daily_price集合中加载指定股票的数据。
         """
         # 移除股票代码前缀，转换为数字
         sec_code = int(stock_code.replace('SH', '').replace('SZ', ''))
@@ -382,7 +375,7 @@ class StockService:
                 stock_name = stock['名称']
                 market = stock['市场']
             
-            # 从ClickHouse加载数据
+            # 从MongoDB加载数据
             k_data = self.load_stock_data(stock_code)
             
             if k_data is not None:
@@ -436,7 +429,7 @@ class StockService:
     def update_single_stock_data(self, stock_code, start_date, end_date, data_source="akshare"):
         """更新单只股票的日K线数据
 
-        从指定数据源获取指定股票的日K线数据，并保存到ClickHouse的stock_daily_price表中。
+        从指定数据源获取指定股票的日K线数据，并保存到MongoDB的stock_daily_price集合中。
 
         Args:
             stock_code: 股票代码
@@ -466,7 +459,7 @@ class StockService:
     def check_data_exists(self):
         """检查数据是否存在
         
-        检查ClickHouse的stock_daily_price表中是否有数据。
+        检查MongoDB的stock_daily_price集合中是否有数据。
         """
         return self.repo.get_stock_count() > 0
     

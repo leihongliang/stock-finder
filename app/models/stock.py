@@ -26,7 +26,7 @@ class StockDailyPrice(BaseModel):
     def to_tuple(self):
         """转换为元组格式
         
-        返回一个元组，包含所有字段的值，用于ClickHouse插入。
+        返回一个元组，包含所有字段的值，用于MongoDB插入。
         
         Returns:
             tuple: 包含所有字段值的元组
