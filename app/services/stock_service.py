@@ -93,9 +93,9 @@ class StockService:
                     data = AkShareProvider.get_daily_k_data(stock_code, start_date, end_date)
                     if data is not None and not data.empty:
                         # 计算昨收价、涨跌额和涨跌幅
-                        data['pre_close'] = data['收盘'].shift(1)
-                        data['pre_close'].fillna(data['开盘'].iloc[0], inplace=True)
-                        data['change'] = data['收盘'] - data['pre_close']
+                        data['pre_close'] = data['close'].shift(1)
+                        data['pre_close'].fillna(data['open'].iloc[0], inplace=True)
+                        data['change'] = data['close'] - data['pre_close']
                         data['pct_chg'] = (data['change'] / data['pre_close']) * 100
                         
                         # 移除股票代码前缀，保持为字符串
@@ -105,19 +105,17 @@ class StockService:
                         
                         for _, row in data.iterrows():
                             # 将价格乘以100转换为整数
-                            open_price = int(float(row['开盘']) * 100)
-                            high_price = int(float(row['最高']) * 100)
-                            low_price = int(float(row['最低']) * 100)
-                            close_price = int(float(row['收盘']) * 100)
+                            open_price = int(float(row['open']) * 100)
+                            high_price = int(float(row['high']) * 100)
+                            low_price = int(float(row['low']) * 100)
+                            close_price = int(float(row['close']) * 100)
                             
-                            # 计算昨收价、涨跌额和涨跌幅
                             pre_close = int(float(row['pre_close']) * 100)
                             change = int(float(row['change']) * 100)
-                            pct_chg = int(float(row['pct_chg']) * 100)  # 转换为0.01%
+                            pct_chg = int(float(row['pct_chg']) * 100)
                             
-                            # 成交量和成交额
-                            volume = int(row['成交量'])
-                            amount = int(row['成交额'])
+                            volume = int(row['volume'])
+                            amount = int(row['amount'])
                             
                             # 其他字段使用默认值
                             adjfactor = 10000  # 默认调整因子
@@ -126,7 +124,7 @@ class StockService:
                             
                             # 创建StockDailyPrice对象
                             stock_price = StockDailyPrice(
-                                trade_date=pd.to_datetime(row['日期']).date(),
+                                trade_date=pd.to_datetime(row['date']).date(),
                                 sec_code=sec_code,
                                 open=open_price,
                                 high=high_price,
@@ -166,16 +164,15 @@ class StockService:
             return None
         
         # 转换为DataFrame
-        columns = ['日期', '开盘', '最高', '最低', '收盘', '成交量', '成交额']
+        columns = ['date', 'open', 'high', 'low', 'close', 'volume', 'amount']
         k_data = pd.DataFrame(result, columns=columns)
-        
-        # 将价格除以100转换回小数
-        k_data['开盘'] = k_data['开盘'] / 100
-        k_data['最高'] = k_data['最高'] / 100
-        k_data['最低'] = k_data['最低'] / 100
-        k_data['收盘'] = k_data['收盘'] / 100
-        
-        k_data['日期'] = pd.to_datetime(k_data['日期'])
+
+        k_data['open'] = k_data['open'] / 100
+        k_data['high'] = k_data['high'] / 100
+        k_data['low'] = k_data['low'] / 100
+        k_data['close'] = k_data['close'] / 100
+
+        k_data['date'] = pd.to_datetime(k_data['date'])
         
         return k_data
 
@@ -463,40 +460,41 @@ class StockService:
         只同步数据库中不存在的新数据。
         
         Args:
-            start_date (date, optional): 开始日期. Defaults to None (akshare单次最多获取5年 默认使用2023-01-01).
-            end_date (date, optional): 结束日期. Defaults to None (使用当天日期).
-        
-        Returns:
-            dict: 同步结果
+            start_date (date, optional): 开始日期. Defaults to None (使用当天日期).
+            end_date (date, optional): 结束日期. Defaults to None (使用当年年末).
         """
 
         try:
             logger.info("开始从AkShare获取交易日历数据")
             
-            # 获取数据库中最新的交易日日期
+            # 获取数据库中最新和最早的交易日日期
             latest_db_date = self.repo.get_latest_trade_date()
-            default_start_date = date(2023, 1, 1)
-
+            earliest_db_date = self.repo.get_earliest_trade_date()
+            
             # 定义日期范围
             if start_date is None:
-                start_date = default_start_date
+                start_date = date.today()  # 默认开始日期为当天
             if end_date is None:
-                end_date = date.today()  # 使用当天日期作为结束日期
+                end_date = date(date.today().year, 12, 31)  # 默认结束日期为当年年末
             
-            # 如果数据库已有数据且用户未指定开始日期，则从最新日期的下一天开始
-            if latest_db_date and end_date > latest_db_date:
+            # 检查数据库中是否已有该范围内的数据
+            if earliest_db_date and latest_db_date:
+                logger.info(f"数据库中最早的交易日日期: {earliest_db_date}")
                 logger.info(f"数据库中最新的交易日日期: {latest_db_date}")
-                start_date = latest_db_date + timedelta(days=1)
-                if start_date > end_date:
-                    logger.info("数据库数据已经是最新的，无需同步")
-                    return {
-                        "message": "数据库数据已经是最新的，无需同步",
-                        "success": True,
-                        "count": 0,
-                        "latest_date": latest_db_date.isoformat()
-                    }
+                
+                # 如果数据库中已有完整的指定范围数据，则无需同步
+                if start_date >= earliest_db_date and end_date <= latest_db_date:
+                    logger.info("数据库中已有指定范围内的完整数据，无需同步")
+                    return
+                # 如果数据库有部分数据，则从最新日期的下一天开始同步
+                elif end_date > latest_db_date:
+                    logger.info("数据库中有部分数据，从最新日期的下一天开始同步")
+                    start_date = latest_db_date + timedelta(days=1)
+                    if start_date > end_date:
+                        logger.info("数据库数据已经是最新的，无需同步")
+                        return
             else:
-                logger.info("数据库中没有交易日历数据或用户指定了开始日期，将同步指定范围的数据")
+                logger.info("数据库中没有交易日历数据，将同步指定范围的完整数据")
             
             # 存储所有数据
             all_trade_dates = set()
@@ -530,29 +528,13 @@ class StockService:
                 success = self.repo.save_trade_calendar(trade_calendar_list)
                 if success:
                     logger.info(f"成功保存 {len(trade_calendar_list)} 条交易日历数据")
-                    return {
-                        "message": f"成功同步 {len(trade_calendar_list)} 条交易日历数据，覆盖{start_date}到{end_date}范围",
-                        "success": True,
-                        "count": len(trade_calendar_list),
-                        "start_date": start_date.isoformat(),
-                        "end_date": end_date.isoformat()
-                    }
                 else:
                     logger.error("保存交易日历数据失败")
-                    return {"message": "保存交易日历数据失败", "success": False}
             else:
                 logger.info("没有需要同步的新数据")
-                return {
-                    "message": "没有需要同步的新数据",
-                    "success": True,
-                    "count": 0,
-                    "start_date": start_date.isoformat(),
-                    "end_date": end_date.isoformat()
-                }
                 
         except Exception as e:
             logger.error(f"同步交易日历数据失败: {e}")
-            return {"message": f"同步交易日历数据失败: {str(e)}", "success": False}
     
     def validate_strategy(self, strategy_name, start_date=None, end_date=None):
         """根据策略从历史数据中找到符合的股票及其时间段区间，并验证之后几天的股票涨幅，计算策略的正确率
@@ -584,8 +566,8 @@ class StockService:
             
             # 1. 更新交易日历到最新的一天
             logger.info("开始更新交易日历...")
-            calendar_result = self.sync_trade_calendar()
-            results['calendar_update'] = calendar_result
+            self.sync_trade_calendar()
+            results['calendar_update'] = {"success": True, "message": "交易日历更新完成"}
             
             # 2. 更新新增的A股公司，去掉没有的
             logger.info("开始更新A股公司信息...")

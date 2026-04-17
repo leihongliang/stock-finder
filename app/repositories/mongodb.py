@@ -309,6 +309,38 @@ class MongoDBRepository:
             logger.error(f"获取最新交易日日期失败: {e}")
             return None
     
+    def get_earliest_trade_date(self):
+        """获取最早的交易日日期
+        
+        Returns:
+            date or None: 最早的交易日日期，如果没有数据则返回None
+        """
+        if not self.client:
+            return None
+        
+        try:
+            # 按trade_date升序排序，取第一条记录
+            earliest_doc = self.calendar_collection.find_one(
+                {},
+                {'trade_date': 1},
+                sort=[('trade_date', 1)]
+            )
+            
+            if earliest_doc and 'trade_date' in earliest_doc:
+                trade_date = earliest_doc['trade_date']
+                # 处理datetime类型的trade_date
+                if hasattr(trade_date, 'date'):
+                    return trade_date.date()
+                # 兼容处理字符串类型的trade_date（用于旧数据）
+                try:
+                    return date.fromisoformat(trade_date)
+                except:
+                    pass
+            return None
+        except Exception as e:
+            logger.error(f"获取最早交易日日期失败: {e}")
+            return None
+    
     def get_unique_stock_codes(self):
         """获取stock_daily_price表中所有唯一的股票代码
         
