@@ -1,16 +1,9 @@
 from fastapi import APIRouter, HTTPException
-from app.models.stock import StockPatternRequest, StockPatternResponse
+
+from app.models.stock import SyncStockDataRequest
 from app.services.stock_service import StockService
-from pydantic import BaseModel
 
-class UpdateStockRequest(BaseModel):
-    """更新单只股票数据的请求模型"""
-    stock_code: str      # 股票代码
-    start_date: str      # 开始日期
-    end_date: str        # 结束日期
-    data_source: str = "akshare"  # 数据源，可选值为"akshare"或"tushare"
-
-router = APIRouter(prefix="/api/stocks", tags=["stocks"])
+router = APIRouter(prefix="/api/stocks", tags=["stocks-update"])
 stock_service = StockService()
 
 @router.post("/companies")
@@ -24,13 +17,6 @@ def refresh_stock_companies():
             return {"message": "A股公司信息获取或保存失败"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"服务器内部错误: {str(e)}")
-
-class SyncStockDataRequest(BaseModel):
-    """同步股票数据的请求模型"""
-    start_date: str          # 开始日期，格式为"YYYYMMDD"
-    end_date: str            # 结束日期，格式为"YYYYMMDD"
-    stock_codes: list[str] = None  # 股票代码列表，为None时同步所有股票
-    data_source: str = "akshare"  # 数据源，可选值为"akshare"或"tushare"
 
 @router.post("/sync-range")
 def sync_stock_data_in_range(request: SyncStockDataRequest):
@@ -73,31 +59,6 @@ def sync_trade_calendar(start_date: str = None, end_date: str = None):
             end_date_obj = datetime.strptime(end_date, "%Y%m%d").date()
         
         result = stock_service.sync_trade_calendar(start_date=start_date_obj, end_date=end_date_obj)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"服务器内部错误: {str(e)}")
-
-class StrategyValidationRequest(BaseModel):
-    """策略验证请求模型"""
-    strategy_name: str      # 策略名称，目前支持 "strategy1"
-    start_date: str = None  # 开始日期，格式为"YYYY-MM-DD"
-    end_date: str = None    # 结束日期，格式为"YYYY-MM-DD"
-
-@router.post("/strategy/validate")
-def validate_strategy(request: StrategyValidationRequest):
-    """根据策略从历史数据中找到符合的股票及其时间段区间，并验证之后几天的股票涨幅，计算策略的正确率
-    
-    目前支持的策略：
-    - strategy1: 至少连续上涨≥4天（允许夹一根小阴线），出现放量大阳线，后续3天不跌破异动阳线的开盘价
-    """
-    try:
-        # 验证策略
-        result = stock_service.validate_strategy(
-            request.strategy_name,
-            request.start_date,
-            request.end_date
-        )
-        
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"服务器内部错误: {str(e)}")
