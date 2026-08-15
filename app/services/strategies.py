@@ -1050,7 +1050,7 @@ def macd_cross_strategy(filtered_data, stock_code, stock_name, market, ma_filter
         curr_macd_hist = df.iloc[i]['macd_hist']
 
         if prev_macd_hist <= 0 and curr_macd_hist > 0:
-            if position is None and df.iloc[i]['macd'] > 0:
+            if position is None:
                 can_buy = True
                 if ma_filter is not None and df.iloc[i]['close'] < df.iloc[i]['MA_FILTER']:
                         can_buy = False
@@ -1061,7 +1061,7 @@ def macd_cross_strategy(filtered_data, stock_code, stock_name, market, ma_filter
                         'buy_index': i,
                         'macd_hist_at_buy': curr_macd_hist
                     }
-        elif prev_macd_hist >= 0 and curr_macd_hist < 0:
+        elif prev_macd_hist > 0 and curr_macd_hist <= 0:
             if position is not None:
                 sell_price = df.iloc[i]['close']
                 sell_date = df.iloc[i]['date'].strftime('%Y-%m-%d')
@@ -1183,7 +1183,7 @@ def macd_rejuvenation_strategy(filtered_data, stock_code, stock_name, market):
                     has_next_golden = True
                     next_golden_date = df.iloc[j]['date'].strftime('%Y-%m-%d')
                     # 计算金叉是否在零轴附近
-                    macd_ffat_gc = df.iloc[j]['macd']
+                    macd_at_gc = df.iloc[j]['macd']
                     macd_value = round(macd_at_gc, 4)
                     recent_range = df.iloc[max(0, death_cross_idx - 20):death_cross_idx + 1]['macd'].max() - \
                                    df.iloc[max(0, death_cross_idx - 20):death_cross_idx + 1]['macd'].min()

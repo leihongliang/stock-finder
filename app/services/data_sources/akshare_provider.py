@@ -93,12 +93,12 @@ class AkShareProvider:
     
     @staticmethod
     def get_etf_daily_k_data(etf_code: str, start_date: str | None = None, end_date: str | None = None) -> DataFrame | None:
-        """获取ETF日K线数据
+        """获取ETF日K线数据（前复权）
         
-        从AkShare(新浪)获取指定ETF的日K线数据。
+        从AkShare(东方财富)获取指定ETF的日K线数据。
         
         Args:
-            etf_code: ETF代码，如"510500"(中证500ETF)，会自动添加市场前缀
+            etf_code: ETF代码，如"510500"(中证500ETF)，会自动去除市场前缀
             start_date: 开始日期，格式为"YYYYMMDD"（可选）
             end_date: 结束日期，格式为"YYYYMMDD"（可选）
             
@@ -106,27 +106,17 @@ class AkShareProvider:
             DataFrame: K线数据
         """
         try:
-            # 添加市场前缀
-            if not etf_code.startswith(('sh', 'sz')):
-                if etf_code.startswith(('50', '51', '58')):
-                    etf_code = f'sh{etf_code}'
-                else:
-                    etf_code = f'sz{etf_code}'
-            
+            # fund_etf_hist_em 只需要纯数字代码，去掉市场前缀
+            clean_code = etf_code.lstrip('shsz')
+
             for i in range(3):
                 try:
                     print(f"尝试从AkShare获取{etf_code} ETF日K线数据 (尝试 {i+1}/3)...")
-                    k_data = ak.fund_etf_hist_sina(symbol=etf_code)
+                    k_data = ak.fund_etf_hist_em(symbol=clean_code, period="daily",
+                                                  start_date=start_date or "",
+                                                  end_date=end_date or "",
+                                                  adjust="qfq")
                     print(f"从AkShare获取{etf_code} ETF日K线数据成功，共 {len(k_data)} 条记录")
-                    
-                    # 如果指定了日期范围，进行过滤
-                    if start_date or end_date:
-                        k_data['date'] = pd.to_datetime(k_data['date'])
-                        if start_date:
-                            k_data = k_data[k_data['date'] >= pd.to_datetime(start_date)]
-                        if end_date:
-                            k_data = k_data[k_data['date'] <= pd.to_datetime(end_date)]
-                    
                     time.sleep(3)
                     return k_data
                 except Exception as e:
